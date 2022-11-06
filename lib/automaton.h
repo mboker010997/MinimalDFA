@@ -15,6 +15,9 @@ using std::cout;
 using std::map;
 using std::set;
 
+const vector<int> empty_vector;
+const int INF = 1e9;
+
 class Automaton {
 private:
 
@@ -37,9 +40,14 @@ private:
     int start;
     int vertex;
     string alp;
-    vector<vector<Edge>> edges;
-    // vector<map<char, int>> go;
+    vector<map<char, vector<int>>> edges;
     std::set<int> terms;
+
+    static char get_edge_symbol(pair<char, const vector<int>&> map_pair);
+
+    static const vector<int>& get_edge_neighbours(pair<char, const vector<int>&> map_pair);
+
+    static int get_edge_neighbor(pair<char, const vector<int>&> map_pair);
 
     static bool get_bit(int mask, int pos);
 
@@ -49,7 +57,9 @@ private:
 
     void remove_extra_vertices();
 
-    // void build_go();
+    bool dfs_finding_cycle_by_letter(int v, char c, vector<char>& used);
+
+    void topological_sort_by_letter(int v, char c, vector<bool>& used, vector<int>& order);
 
 public:
     Automaton() = default;
@@ -64,11 +74,9 @@ public:
 
     int get_start() const;
 
+    int get_next(int v, char w) const;
+
     string get_alp() const;
-
-    // int next(int v, char c);
-
-    vector<int> get_all_next(int v, char c);
 
     void add_edge(int v, int to, char w);
 
@@ -81,6 +89,12 @@ public:
     void to_pdka();
 
     void to_mpdka();
+
+    bool find_cycle_by_letter(char c);
+
+    int get_max_end_by_letter(char c);
+
+    friend class Node;
 
     friend bool operator<(const Automaton::Edge& fst, const Automaton::Edge& snd);
     friend bool operator==(const Automaton::Edge& fst, const Automaton::Edge& snd);
