@@ -55,7 +55,7 @@ private:
 
     void compress_and_assign_edges(const vector<Edge>& pairs);
 
-    void remove_extra_vertices();
+    void remove_reachless_vertices();
 
     bool dfs_finding_cycle_by_letter(int v, char c, vector<char>& used);
 

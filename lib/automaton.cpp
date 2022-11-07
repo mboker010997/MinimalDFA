@@ -59,7 +59,7 @@ void Automaton::compress_and_assign_edges(const vector<Automaton::Edge>& pairs) 
     start = lower_bound(xs.begin(), xs.end(), start) - xs.begin();
 }
 
-void Automaton::remove_extra_vertices() {
+void Automaton::remove_reachless_vertices() {
     std::set<int> removed;
     vector<bitset<MAX_VERTEX>> is_reach(vertex, 0);
     for (int v = 0; v < vertex; ++v) {
@@ -144,7 +144,8 @@ int Automaton::get_max_end_by_letter(char c) {
         if (terms.count(v) != 0) current_dp_result = 0;
         for (auto edge : edges[v]) {
             for (int to : get_edge_neighbours(edge)) {
-                current_dp_result = std::max(current_dp_result, dp[to] + 1);
+                char w = get_edge_symbol(edge);
+                current_dp_result = std::max(current_dp_result, dp[to] + (w == c ? 1 : 0));
             }
         }
         dp[v] = current_dp_result;
@@ -284,7 +285,7 @@ void Automaton::remove_eps_edges() {
         }
     }
     edges = new_edges;
-    remove_extra_vertices();
+    remove_reachless_vertices();
 }
 
 bool Automaton::is_dka() const {
@@ -410,15 +411,18 @@ void Automaton::to_mpdka() {
 
 
 bool operator<(const Automaton::Edge& fst, const Automaton::Edge& snd) {
-    pair<pair<int, int>, char> ff = {{fst.v, fst.to}, fst.w};
-    pair<pair<int, int>, char> ss = {{snd.v, snd.to}, snd.w};
-    return ff < ss;
+    if (fst.v < snd.v) {
+        return true;
+    } else if (fst.v == snd.v && fst.to < snd.to) {
+        return true;
+    } else if (fst.v == snd.v && fst.to == snd.to && fst.w < snd.w) {
+        return true;
+    }
+    return false;
 }
 
 bool operator==(const Automaton::Edge& fst, const Automaton::Edge& snd) {
-    pair<pair<int, int>, char> ff = {{fst.v, fst.to}, fst.w};
-    pair<pair<int, int>, char> ss = {{snd.v, snd.to}, snd.w};
-    return ff == ss;
+    return fst.v == snd.v && fst.to == snd.to && fst.w == snd.w;
 }
 
 bool operator<=(const Automaton::Edge& fst, const Automaton::Edge& snd) {

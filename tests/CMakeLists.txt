@@ -4,13 +4,9 @@ project(AutTests)
 
 find_package(GTest REQUIRED CONFIG)
 
-add_custom_command(
-    OUTPUT mbo.txt
-    COMMAND cp -r ${CMAKE_SOURCE_DIR}/tests/txt ${CMAKE_CURRENT_BINARY_DIR}/txt
-)
-
 add_executable(Tests main_test.cpp tests_imp.cpp)
 add_dependencies(Tests AutLib)
+add_dependencies(Tests copy_test_files)
 
 target_include_directories(
     Tests
@@ -24,6 +20,7 @@ target_link_libraries(
     AutLib
     GTest::gtest GTest::gtest_main
 )
+
 
 
 
