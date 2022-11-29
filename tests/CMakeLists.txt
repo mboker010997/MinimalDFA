@@ -6,7 +6,7 @@ find_package(GTest REQUIRED CONFIG)
 
 add_executable(Tests main_test.cpp tests_imp.cpp)
 add_dependencies(Tests AutLib)
-add_dependencies(Tests copy_test_files)
+# add_dependencies(Tests copy_test_files)
 
 target_include_directories(
     Tests

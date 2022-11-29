@@ -23,7 +23,7 @@ int Automaton::get_edge_neighbor(pair<char, const vector<int>&> map_pair) {
 
 vector<Automaton::Edge> Automaton::get_edges_list(std::set<int> removed) {
     vector<Edge> res;
-    for (int v = 0; v < vertex; ++v) {
+    for (int v = 0; v < vertices_count; ++v) {
         for (auto edge : edges[v]) {
             for (auto to : Automaton::get_edge_neighbours(edge)) {
                 if (removed.count(v) || removed.count(to)) continue;
@@ -34,39 +34,56 @@ vector<Automaton::Edge> Automaton::get_edges_list(std::set<int> removed) {
     return res;
 }
 
-void Automaton::compress_and_assign_edges(const vector<Automaton::Edge>& pairs) {
-    vector<int> xs;
+vector<int> Automaton::get_compressed_list(const vector<Automaton::Edge>& pairs) {
+    vector<int> list_of_vertices;
     for (const Edge& edge : pairs) {
-        xs.push_back(edge.v);
-        xs.push_back(edge.to);
+        list_of_vertices.push_back(edge.v);
+        list_of_vertices.push_back(edge.to);
     }
-    std::sort(xs.begin(), xs.end());
-    xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
-    vertex = xs.size();
+    std::sort(list_of_vertices.begin(), list_of_vertices.end());
+    list_of_vertices.erase(std::unique(list_of_vertices.begin(), list_of_vertices.end()), list_of_vertices.end());
+    return list_of_vertices;
+}
+
+int Automaton::get_new_vertice_number(const vector<int>& compressed_list, int vertice) {
+    return lower_bound(compressed_list.begin(), compressed_list.end(), vertice) - compressed_list.begin();
+}
+
+void Automaton::new_terms_after_compression(const vector<int>& compressed_list) {
     std::set<int> new_terms;
     for (auto v : terms) {
-        int u = lower_bound(xs.begin(), xs.end(), v) - xs.begin();
-        new_terms.insert(u);
+        int new_number_of_v = get_new_vertice_number(compressed_list, v);
+        new_terms.insert(new_number_of_v);
     }
     terms = new_terms;
+}
+
+void Automaton::new_edges_after_compression(const vector<Automaton::Edge>& pairs, const vector<int>& compressed_list) {
     edges.clear();
-    edges.resize(vertex);
+    edges.resize(vertices_count);
     for (const Edge& edge : pairs) {
-        int v = lower_bound(xs.begin(), xs.end(), edge.v) - xs.begin();
-        int to = lower_bound(xs.begin(), xs.end(), edge.to) - xs.begin();
+        int v = get_new_vertice_number(compressed_list, edge.v);
+        int to = get_new_vertice_number(compressed_list, edge.to);
         edges[v][edge.w].push_back(to);
     }
-    start = lower_bound(xs.begin(), xs.end(), start) - xs.begin();
+}
+
+void Automaton::compress_and_assign_edges(const vector<Automaton::Edge>& pairs) {
+    vector<int> compressed_list = get_compressed_list(pairs);
+    vertices_count = compressed_list.size();
+    new_terms_after_compression(compressed_list);
+    new_edges_after_compression(pairs, compressed_list);
+    start = get_new_vertice_number(compressed_list, start);
 }
 
 void Automaton::remove_reachless_vertices() {
     std::set<int> removed;
-    vector<bitset<MAX_VERTEX>> is_reach(vertex, 0);
-    for (int v = 0; v < vertex; ++v) {
+    vector<bitset<MAX_VERTEX>> is_reach(vertices_count, 0);
+    for (int v = 0; v < vertices_count; ++v) {
         is_reach[v][v] = 1;
     }
-    for (int i = 0; i < vertex; ++i) {
-        for (int v = 0; v < vertex; ++v) {
+    for (int i = 0; i < vertices_count; ++i) {
+        for (int v = 0; v < vertices_count; ++v) {
             for (auto edge : edges[v]) {
                 for (int to : Automaton::get_edge_neighbours(edge)) {
                     is_reach[v] |= is_reach[to];
@@ -74,12 +91,12 @@ void Automaton::remove_reachless_vertices() {
             }
         }
     }
-    for (int v = 0; v < vertex; ++v) {
+    for (int v = 0; v < vertices_count; ++v) {
         if (!is_reach[start][v]) {
             removed.insert(v);
         }
         bool ok = 0;
-        for (int u = 0; u < vertex; ++u) {
+        for (int u = 0; u < vertices_count; ++u) {
             if (terms.count(u) && is_reach[v][u]) ok = 1;
         }
         if (!ok) removed.insert(v);
@@ -90,18 +107,19 @@ void Automaton::remove_reachless_vertices() {
 
 bool Automaton::dfs_finding_cycle_by_letter(int v, char c, vector<char>& used) {
     if (!is_dka()) {
-        throw std::runtime_error("Automaton is not DKA!");
+        throw std::runtime_error("Automaton is not DKA!!!");
     }
     used[v] = 1;
     for (auto edge : edges[v]) {
         char w = get_edge_symbol(edge);
-        int to = get_edge_neighbor(edge);
         if (w == c) {
-            if (used[to] == 1) {
-                return true;
-            } else {
-                if (dfs_finding_cycle_by_letter(to, c, used)) {
+            for (int to : get_edge_neighbours(edge)) {
+                if (used[to] == 1) {
                     return true;
+                } else {
+                    if (dfs_finding_cycle_by_letter(to, c, used)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -111,7 +129,7 @@ bool Automaton::dfs_finding_cycle_by_letter(int v, char c, vector<char>& used) {
 }
 
 bool Automaton::find_cycle_by_letter(char c) {
-    vector<char> used(vertex, 0);
+    vector<char> used(vertices_count, 0);
     return dfs_finding_cycle_by_letter(start, c, used);
 }
 
@@ -131,10 +149,10 @@ int Automaton::get_max_end_by_letter(char c) {
     if (find_cycle_by_letter(c)) {
         return INF;
     }
-    vector<int> dp(vertex, -1);
-    vector<bool> used_for_topsort(vertex, 0);
+    vector<int> dp(vertices_count, -1);
+    vector<bool> used_for_topsort(vertices_count, 0);
     vector<int> topsort_order;
-    for (int v = 0; v < vertex; ++v) {
+    for (int v = 0; v < vertices_count; ++v) {
         if (!used_for_topsort[v]) {
             topological_sort_by_letter(v, c, used_for_topsort, topsort_order);
         }
@@ -145,7 +163,9 @@ int Automaton::get_max_end_by_letter(char c) {
         for (auto edge : edges[v]) {
             for (int to : get_edge_neighbours(edge)) {
                 char w = get_edge_symbol(edge);
-                current_dp_result = std::max(current_dp_result, dp[to] + (w == c ? 1 : 0));
+                if (w == c) {
+                    current_dp_result = std::max(current_dp_result, dp[to] + 1);
+                }
             }
         }
         dp[v] = current_dp_result;
@@ -155,31 +175,32 @@ int Automaton::get_max_end_by_letter(char c) {
 
 int Automaton::get_next(int v, char w) const {
     if (edges[v].count(w) == 0) {
-        throw std::runtime_error("No next for vertex by symbol" + w);
+        throw std::runtime_error("No next for vertices_count by symbol" + w);
     }
     return edges[v].at(w)[0];
 }
 
-Automaton::Automaton(int vertex, int start, const string& alp, const vector<int>& _terms) 
-    : vertex(vertex), start(start), alp(alp) {
+Automaton::Automaton(int vertices_count, int start, const string& alp, const vector<int>& _terms) 
+    : vertices_count(vertices_count), start(start), alp(alp) {
     terms = std::set<int> (_terms.begin(), _terms.end());
-    edges.resize(vertex);
+    edges.resize(vertices_count);
 }
 
-Automaton::Automaton(char c, const string& alp = "abc") : start(0), alp(alp) {
+Automaton::Automaton(char c) : start(0), alp("") {
     if (c == '1') {
-        vertex = 1;
+        vertices_count = 1;
         terms = {0};
-        edges.resize(vertex);
+        edges.resize(vertices_count);
     } else {
-        vertex = 2;
+        alp += c;
+        vertices_count = 2;
         terms = {1};
-        edges.resize(vertex);
+        edges.resize(vertices_count);
         edges[0][c].push_back(1);
     }
 }
 
-Automaton::Automaton(const string& regex, const string& alp = "abc") : alp(alp) {
+Automaton::Automaton(const string& regex) {
     std::stack<Automaton> st;
     for (char cur_sym : regex) {
         if (cur_sym == '+') {
@@ -226,10 +247,11 @@ Automaton::Automaton(const string& regex, const string& alp = "abc") : alp(alp) 
         throw std::runtime_error("Incorrect regex");
     }
     *this = st.top();
+    to_mpdka();
 }
 
-int Automaton::get_vertex() const {
-    return vertex;
+int Automaton::get_vertices_count() const {
+    return vertices_count;
 }
 
 int Automaton::get_start() const {
@@ -245,9 +267,9 @@ void Automaton::add_edge(int v, int to, char w) {
 }
 
 void Automaton::remove_eps_edges() {
-    vector<bitset<MAX_VERTEX>> is_reach(vertex, 0);
-    vector<vector<Edge>> eps_edges(vertex);
-    for (int v = 0; v < vertex; ++v) {
+    vector<bitset<MAX_VERTEX>> is_reach(vertices_count, 0);
+    vector<vector<Edge>> eps_edges(vertices_count);
+    for (int v = 0; v < vertices_count; ++v) {
         for (auto edge : edges[v]) {
             char w = get_edge_symbol(edge);
             for (int to : get_edge_neighbours(edge)) {
@@ -259,8 +281,8 @@ void Automaton::remove_eps_edges() {
         is_reach[v][v] = 1;
     }
 
-    for (int i = 0; i < vertex; ++i) {
-        for (int v = 0; v < vertex; ++v) {
+    for (int i = 0; i < vertices_count; ++i) {
+        for (int v = 0; v < vertices_count; ++v) {
             for (const Edge& edge : eps_edges[v]) {
                 int to = edge.to;
                 is_reach[v] |= is_reach[to];
@@ -268,9 +290,9 @@ void Automaton::remove_eps_edges() {
         }
     }
 
-    vector<map<char, vector<int>>> new_edges(vertex);
-    for (int v = 0; v < vertex; ++v) {
-        for (int u = 0; u < vertex; ++u) {
+    vector<map<char, vector<int>>> new_edges(vertices_count);
+    for (int v = 0; v < vertices_count; ++v) {
+        for (int u = 0; u < vertices_count; ++u) {
             if (is_reach[v][u]) {
                 for (auto edge : edges[u]) {
                     char w = get_edge_symbol(edge);
@@ -289,7 +311,7 @@ void Automaton::remove_eps_edges() {
 }
 
 bool Automaton::is_dka() const {
-    for (int v = 0; v < vertex; ++v) {
+    for (int v = 0; v < vertices_count; ++v) {
         std::set<char> used;
         for (auto edge : edges[v]) {
             char w = get_edge_symbol(edge);
@@ -301,7 +323,9 @@ bool Automaton::is_dka() const {
 }
 
 void Automaton::to_dka() {
-    if (is_dka()) return;
+    if (is_dka()) {
+        return;
+    }
     remove_eps_edges();
     vector<Edge> list;
     std::queue<int> q;
@@ -313,7 +337,7 @@ void Automaton::to_dka() {
         int mask = q.front();
         q.pop();
         if (used.count(mask)) continue;
-        for (int v = 0; v < vertex; ++v) {
+        for (int v = 0; v < vertices_count; ++v) {
             if (terms.count(v) && get_bit(mask, v)) {
                 new_terms.insert(mask);
                 break;
@@ -321,7 +345,7 @@ void Automaton::to_dka() {
         }
         used.insert(mask);
         std::map<char, int> delta;
-        for (int v = 0; v < vertex; ++v) {
+        for (int v = 0; v < vertices_count; ++v) {
             if (get_bit(mask, v)) {
                 for (auto edge : edges[v]) {
                     char w = get_edge_symbol(edge);
@@ -343,37 +367,37 @@ void Automaton::to_dka() {
 void Automaton::to_pdka() {
     if (!is_dka()) to_dka();
     auto list = get_edges_list();
-    int stok = vertex;
-    bool ok = 0;
-    for (int v = 0; v < vertex; ++v) {
+    int stok = vertices_count;
+    bool is_need_stok = 0;
+    for (int v = 0; v < vertices_count; ++v) {
         std::set<char> used;
         for (auto edge : edges[v]) {
             used.insert(get_edge_symbol(edge));
         }
         for (char c : alp) {
             if (!used.count(c)) {
-                ok = 1;
+                is_need_stok = 1;
                 list.push_back(Edge(v, stok, c));
             }
         }
     }
-    if (!ok) return;
-    for (char c : alp) {
-        list.push_back(Edge(stok, stok, c));
+    if (is_need_stok) {
+        for (char c : alp) {
+            list.push_back(Edge(stok, stok, c));
+        }
     }
     compress_and_assign_edges(list);
-    // build_go();
 }
 
 void Automaton::to_mpdka() {
     to_pdka();
-    vector<int> cl(vertex, 0);
+    vector<int> cl(vertices_count, 0);
     for (auto v : terms) {
         cl[v] = 1;
     }   
-    for (int i = 0; i < vertex; ++i) {
-        vector<pair<pair<int, std::map<char, int>>, int>> cmp(vertex);
-        for (int v = 0; v < vertex; ++v) {
+    for (int i = 0; i < vertices_count; ++i) {
+        vector<pair<pair<int, std::map<char, int>>, int>> cmp(vertices_count);
+        for (int v = 0; v < vertices_count; ++v) {
             cmp[v].first.first = cl[v];
             cmp[v].second = v;
             for (auto edge : edges[v]) {
@@ -385,7 +409,7 @@ void Automaton::to_mpdka() {
         }
         std::sort(cmp.begin(), cmp.end());
         cl[cmp[0].second] = 0;
-        for (int j = 1; j < vertex; ++j) {
+        for (int j = 1; j < vertices_count; ++j) {
             cl[cmp[j].second] = cl[cmp[j - 1].second];
             if (cmp[j].first != cmp[j - 1].first) cl[cmp[j].second]++;
         }
@@ -441,24 +465,41 @@ bool operator!=(const Automaton::Edge& fst, const Automaton::Edge& snd) {
     return !(snd == fst);
 }
 
+string union_strings(const string& fst, const string& snd) {
+    std::set<char> set_of_symbols;
+    for (char c : fst) {
+        set_of_symbols.insert(c);
+    }
+    for (char c : snd) {
+        set_of_symbols.insert(c);
+    }
+    string result = "";
+    for (char c : set_of_symbols) {
+        result += c;
+    }
+    return result;
+}
+
 Automaton operator+(const Automaton& fst, const Automaton& snd) {
     Automaton result;
     const int fst_shift = 1;
-    const int snd_shift = fst.get_vertex() + 1;
-    result.vertex = 2 + fst.get_vertex() + snd.get_vertex();
-    result.edges.resize(result.vertex);
+    const int snd_shift = fst.get_vertices_count() + 1;
+    result.vertices_count = 2 + fst.get_vertices_count() + snd.get_vertices_count();
+    result.edges.resize(result.vertices_count);
     result.start = 0;
     result.add_edge(result.start, fst.start + fst_shift, Automaton::eps);
     result.add_edge(result.start, snd.start + snd_shift, Automaton::eps);
 
-    result.terms = {result.vertex - 1};
+    result.terms = {result.vertices_count - 1};
     int fst_term = *fst.terms.begin();
     int snd_term = *snd.terms.begin();
     int res_term = *result.terms.begin();
     result.add_edge(fst_term + fst_shift, res_term, Automaton::eps);
     result.add_edge(snd_term + snd_shift, res_term, Automaton::eps);
 
-    for (int fst_vertex = 0; fst_vertex < fst.get_vertex(); ++fst_vertex) {
+    result.alp = union_strings(fst.get_alp(), snd.get_alp());
+
+    for (int fst_vertex = 0; fst_vertex < fst.get_vertices_count(); ++fst_vertex) {
         for (auto edge : fst.edges[fst_vertex]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {
@@ -467,8 +508,8 @@ Automaton operator+(const Automaton& fst, const Automaton& snd) {
         }
     }
 
-    for (int snd_vertex = 0; snd_vertex < snd.get_vertex(); ++snd_vertex) {
-        for (auto edge : fst.edges[snd_vertex]) {
+    for (int snd_vertex = 0; snd_vertex < snd.get_vertices_count(); ++snd_vertex) {
+        for (auto edge : snd.edges[snd_vertex]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {
                 result.add_edge(snd_vertex + snd_shift, to + snd_shift, w);
@@ -481,18 +522,20 @@ Automaton operator+(const Automaton& fst, const Automaton& snd) {
 
 Automaton operator-(const Automaton& fst, const Automaton& snd) {
     Automaton result;
-    result.start = 0;
+    result.start = fst.start;
     const int fst_shift = 0;
-    const int snd_shift = fst.get_vertex();
-    result.vertex = fst.get_vertex() + snd.get_vertex();
-    result.edges.resize(result.vertex);
+    const int snd_shift = fst.get_vertices_count();
+    result.vertices_count = fst.get_vertices_count() + snd.get_vertices_count();
+    result.edges.resize(result.vertices_count);
 
-    result.terms = {result.vertex - 1};
     int fst_term = *fst.terms.begin();
     int snd_term = *snd.terms.begin();
+    result.terms = {snd_term + snd_shift};
     result.add_edge(fst_term + fst_shift, snd.start + snd_shift, Automaton::eps);
 
-    for (int fst_vertex = 0; fst_vertex < fst.get_vertex(); ++fst_vertex) {
+    result.alp = union_strings(fst.get_alp(), snd.get_alp());
+
+    for (int fst_vertex = 0; fst_vertex < fst.get_vertices_count(); ++fst_vertex) {
         for (auto edge : fst.edges[fst_vertex]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {
@@ -501,7 +544,7 @@ Automaton operator-(const Automaton& fst, const Automaton& snd) {
         }
     }
 
-    for (int snd_vertex = 0; snd_vertex < snd.get_vertex(); ++snd_vertex) {
+    for (int snd_vertex = 0; snd_vertex < snd.get_vertices_count(); ++snd_vertex) {
         for (auto edge : snd.edges[snd_vertex]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {
@@ -517,14 +560,16 @@ Automaton operator*(const Automaton& fst) {
     Automaton result;
     result.start = 0;
     result.terms = {0};
-    result.vertex = fst.get_vertex() + 1;
-    result.edges.resize(result.vertex);
+    result.vertices_count = fst.get_vertices_count() + 1;
+    result.edges.resize(result.vertices_count);
     int fst_term = *fst.terms.begin();
     const int fst_shift = 1;
     result.add_edge(result.start, fst.start + fst_shift, Automaton::eps);
     result.add_edge(fst_term + fst_shift, result.start, Automaton::eps);
 
-    for (int fst_vertex = 0; fst_vertex < fst.get_vertex(); ++fst_vertex) {
+    result.alp = fst.get_alp();
+
+    for (int fst_vertex = 0; fst_vertex < fst.get_vertices_count(); ++fst_vertex) {
         for (auto edge : fst.edges[fst_vertex]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {
@@ -537,7 +582,7 @@ Automaton operator*(const Automaton& fst) {
 }
 
 std::istream& operator>>(std::istream& in, Automaton& aut) {
-    in >> aut.vertex >> aut.start >> aut.alp;
+    in >> aut.vertices_count >> aut.start >> aut.alp;
     int k;
     in >> k;
     for (int i = 0; i < k; ++i) {
@@ -547,7 +592,7 @@ std::istream& operator>>(std::istream& in, Automaton& aut) {
     }
     int m;
     in >> m;
-    aut.edges.resize(aut.vertex);
+    aut.edges.resize(aut.vertices_count);
     for (int i = 0; i < m; ++i) {
         int v, to;
         char w;
@@ -558,14 +603,14 @@ std::istream& operator>>(std::istream& in, Automaton& aut) {
 }
 
 std::ostream& operator<<(std::ostream& out, const Automaton& aut) {
-    out << aut.vertex << ' ' << aut.start << '\n';
-    for (int v = 0; v < aut.vertex; ++v) {
+    out << aut.vertices_count << ' ' << aut.start << '\n';
+    for (int v = 0; v < aut.vertices_count; ++v) {
         if (aut.terms.count(v)) {
             out << v << ' ';
         }
     }
     out << '\n';
-    for (int v = 0; v < aut.vertex; ++v) {
+    for (int v = 0; v < aut.vertices_count; ++v) {
         for (auto edge : aut.edges[v]) {
             char w = Automaton::get_edge_symbol(edge);
             for (int to : Automaton::get_edge_neighbours(edge)) {

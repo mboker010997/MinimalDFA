@@ -10,7 +10,7 @@ int main() {
     char c;
     cin >> c;
     string alp = "abc";
-    Automaton aut(s, alp);
+    Automaton aut(s);
     aut.to_mpdka();
     cout << "Answer: " << aut.get_max_end_by_letter(c) << '\n';
     return 0;

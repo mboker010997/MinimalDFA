@@ -38,7 +38,7 @@ private:
     }
 
     int start;
-    int vertex;
+    int vertices_count;
     string alp;
     vector<map<char, vector<int>>> edges;
     std::set<int> terms;
@@ -53,6 +53,14 @@ private:
 
     vector<Edge> get_edges_list(std::set<int> removed = std::set<int>());
 
+    vector<int> get_compressed_list(const vector<Automaton::Edge>& pairs);
+
+    int get_new_vertice_number(const vector<int>& compressed_list, int vertice);
+
+    void new_terms_after_compression(const vector<int>& compressed_list);
+
+    void new_edges_after_compression(const vector<Automaton::Edge>& pairs, const vector<int>& compressed_list);
+
     void compress_and_assign_edges(const vector<Edge>& pairs);
 
     void remove_reachless_vertices();
@@ -64,13 +72,13 @@ private:
 public:
     Automaton() = default;
 
-    Automaton(int vertex, int start, const string& alp, const vector<int>& _terms);
+    Automaton(int vertices_count, int start, const string& alp, const vector<int>& _terms);
 
-    Automaton(char c, const string& alp);
+    Automaton(char c);
 
-    Automaton(const string& regex, const string& alp);
+    Automaton(const string& regex);
 
-    int get_vertex() const;
+    int get_vertices_count() const;
 
     int get_start() const;
 
@@ -93,8 +101,6 @@ public:
     bool find_cycle_by_letter(char c);
 
     int get_max_end_by_letter(char c);
-
-    friend class Node;
 
     friend bool operator<(const Automaton::Edge& fst, const Automaton::Edge& snd);
     friend bool operator==(const Automaton::Edge& fst, const Automaton::Edge& snd);
