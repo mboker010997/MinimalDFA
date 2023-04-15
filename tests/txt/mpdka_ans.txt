@@ -1,0 +1,6 @@
+ab+*c.c.ab+*.a*.c.
+c
+
+
+6
+(a+b)*cc(a+b)*a*c
